@@ -1,3 +1,5 @@
+import numpy as np
+import matplotlib.pyplot as plt
 
 from Thermal_box import Box
 from Orifice_plate import Plate
@@ -30,11 +32,11 @@ def main():
 
 
     #Maximum number of iterations
-    ite = 100
+    ite = 1000
     # Initialize the while counter
     i = 0
     # set the time step
-    dt = 1 #s
+    dt = 0.002 #s
     #simulation loop starts here
     while i < ite:
         i += 1
@@ -49,6 +51,26 @@ def main():
     flow_test = combustion_chamber.massflow(101325,plate)
 
     print(f" The flow in through the orifice is: {flow_test}")
+
+
+
+    # --------------- heat function test --------
+    t_end = ite*dt
+    heat_data = combustion_chamber.heat_release(1000,t_end,dt)
+    x = heat_data[0]
+    y = heat_data[1]
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(x, y, linewidth=2)
+
+    plt.xlabel("Time [s]")
+    plt.ylabel("Heat released [J]")
+    plt.title("Heat released as a function of time")
+    plt.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig("plot.png", dpi=150, bbox_inches="tight")
+
 
 
 main()

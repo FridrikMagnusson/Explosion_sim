@@ -86,3 +86,19 @@ class Box:
             m_dot = 0
 
         return m_dot
+
+
+
+
+    def heat_release(self, Q_fuel: float,t_end:float, dt: float) -> list:
+
+
+        time = np.arange(0, t_end + dt, dt)
+        t_0 = 0.1
+        d_t = 1
+        m = 2
+        alpha = 5
+
+        heat = (1 - np.exp(-alpha * ((time - t_0) / d_t) ** (m + 1))) * Q_fuel
+
+        return [time, heat]
