@@ -37,5 +37,4 @@ class Box:
         #Input mass_flux kg/s
         self.mass += mass_flux*dt
         self.update_pressure()
-
         self.update_density()
