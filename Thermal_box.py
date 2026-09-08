@@ -25,8 +25,6 @@ class Box:
         self.update_density()
 
 
-
-
     def update_density(self):
         self.density = self.pressure / (self.temperature * self.gas_constant) #Kg/m3
         #print("updated density")
@@ -34,3 +32,10 @@ class Box:
     def update_pressure(self):
         self.pressure = self.mass * self.gas_constant * self.temperature / self.volume
         #print("updated pressure")
+
+    def mass_change(self, mass_flux,dt):
+        #Input mass_flux kg/s
+        self.mass += mass_flux*dt
+        self.update_pressure()
+
+        self.update_density()

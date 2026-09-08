@@ -1,5 +1,5 @@
 
-from Thermal_box import Box
+from .Thermal_box import Box
 
 
 def main():
