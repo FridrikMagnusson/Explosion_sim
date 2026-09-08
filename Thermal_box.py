@@ -1,3 +1,6 @@
+from numpy import pi
+import numpy as np
+
 class Box:
     def __init__(self,height,width,depth):
         self.height = height
@@ -7,6 +10,8 @@ class Box:
         self.temperature = 273              #°K
         self.pressure = 101325              #Pa
         self.molarmass = 28.97 / 1000       #mol / kg
+
+        self.kappa = 1.4
 
         self.universal_gas_constant = 8.314
         self.gas_constant = 8.314 / self.molarmass  #J / kg.K
@@ -38,3 +43,46 @@ class Box:
         self.mass += mass_flux*dt
         self.update_pressure()
         self.update_density()
+
+
+
+    def massflow(self,pressure_downstream: float,orifice: object)-> float:
+
+        #TODO - Validate towards litterature.
+
+        pressure_upstream = self.pressure
+        p = self.pressure
+        p2 = pressure_downstream
+
+        k = self.kappa
+        T = self.temperature
+        R = self.gas_constant
+
+        c_D = 0.5
+
+        A_V = orifice.hole_diameter/1000**2/4*pi #[m2]
+
+        if pressure_upstream > pressure_downstream:
+            print("outflow")
+            if pressure_upstream/pressure_downstream > 1.893: #<--choked flow:
+
+                print("choked_flow")
+                m_dot = -c_D * A_V*np.sqrt((k * p ** 2 / R / T * (2 / (k + 1)) ** ((k + 1) / (k - 1)))) #[kg/s]
+
+            else:
+                print("unchoked_flow")
+                m_dot = -c_D*A_V*np.sqrt(2)*np.sqrt((p ** 2 / R / T * k / (k - 1) * ((p2 / p) ** (2 / k) - (p2 / p) ** ((k + 1) / k))))
+
+        elif pressure_upstream < pressure_downstream:
+            print("inflow")
+            if pressure_downstream/pressure_upstream > 1.893: #<--choked flow:
+                print("choked_flow")
+                m_dot = c_D * A_V*np.sqrt((k * p2 ** 2 / R / T * (2 / (k + 1)) ** ((k + 1) / (k - 1)))) #[kg/s]
+            else:
+                print("unchoked_flow")
+                m_dot = c_D*A_V*np.sqrt(2)*np.sqrt((p2 ** 2 / R / T * k / (k - 1) * ((p / p2) ** (2 / k) - (p / p2) ** ((k + 1) / k)))) #[kg/s]
+
+        else:
+            m_dot = 0
+
+        return m_dot

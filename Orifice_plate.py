@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle
 
 class Plate:
-    def __init__(self, width, height,hole_diameter,number_of_holes):
+    def __init__(self, width: float, height: float,hole_diameter: float,number_of_holes: int):
         self.width = width
         self.height = height
         self.number_of_holes = number_of_holes
@@ -60,11 +60,9 @@ class Plate:
             f"hole diameter={self.hole_diameter})"
         )
 
-    def massflow(self,Pressure_upstream,Pressure_downstream):
 
-        mass_flow_rate = 1 #[kg/s]
 
-        return mass_flow_rate
+
 
 
 
