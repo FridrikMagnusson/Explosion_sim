@@ -1,104 +1,87 @@
-from numpy import pi
 import numpy as np
 
+
 class Box:
-    def __init__(self,height,width,depth):
+    UNIVERSAL_GAS_CONSTANT = 8.314  # J / (mol * K)
+
+    def __init__(self, height: float, width: float, depth: float):
         self.height = height
         self.width = width
         self.depth = depth
 
-        self.temperature = 273              #°K
-        self.pressure = 101325              #Pa
-        self.molarmass = 28.97 / 1000       #mol / kg
+        self.temperature = 273.15  # K
+        self.pressure = 101325.0  # Pa
+        self.molar_mass = 27.7 / 1000.0  # kg / mol
 
         self.kappa = 1.4
+        self.gas_constant = self.UNIVERSAL_GAS_CONSTANT / self.molar_mass  # J / (kg * K)
+        self.density = self.pressure / (self.temperature * self.gas_constant)  # kg / m^3
 
-        self.universal_gas_constant = 8.314
-        self.gas_constant = 8.314 / self.molarmass  #J / kg.K
-        self.density = self.pressure / (self.temperature * self.gas_constant) #Kg/m3
+        # Specific heat capacity: J / (kg * K)
+        self.cp = (7 / 2) * self.gas_constant * 1.3
 
-        self.cp = 7/2 * self.universal_gas_constant / self.molarmass # J / kg.K
+        self.volume: float = self.height * self.width * self.depth  # m^3
+        self.mass: float = self.volume * self.density  # kg
 
-        self.volume: float = self.height*self.width*self.depth # m3
-        self.mass: float   = self.volume *self.density          # kg
-
-    def heat_addtion(self,heat,dt):
-
-        self.temperature += heat*dt/self.cp
-
+    def heat_addition(self, heat: float, dt: float) -> None:
+        """Add heat (Watts) over time step dt (seconds)."""
+        # dT = Q / (m * cp)
+        self.temperature += (heat * dt) / (self.mass * self.cp)
         self.update_pressure()
         self.update_density()
 
+    def update_density(self) -> None:
+        self.density = self.pressure / (self.temperature * self.gas_constant)
 
-    def update_density(self):
-        self.density = self.pressure / (self.temperature * self.gas_constant) #Kg/m3
-        #print("updated density")
+    def update_pressure(self) -> None:
+        self.pressure = (self.mass * self.gas_constant * self.temperature) / self.volume
 
-    def update_pressure(self):
-        self.pressure = self.mass * self.gas_constant * self.temperature / self.volume
-        #print("updated pressure")
-
-    def mass_change(self, mass_flux,dt):
-        #Input mass_flux kg/s
-        self.mass += mass_flux*dt
+    def mass_change(self, mass_flux: float, dt: float) -> None:
+        """Update mass with mass_flux (kg/s) over time step dt (seconds)."""
+        self.mass += mass_flux * dt
         self.update_pressure()
         self.update_density()
 
+    def massflow(self, pressure_downstream: float, orifice: object) -> float:
+        """Calculate mass flow rate through an orifice (kg/s)."""
+        if self.pressure == pressure_downstream:
+            return 0.0
 
-
-    def massflow(self,pressure_downstream: float,orifice: object)-> float:
-
-        #TODO - Validate towards litterature.
-
-        pressure_upstream = self.pressure
-        p = self.pressure
-        p2 = pressure_downstream
+        is_outflow = self.pressure > pressure_downstream
+        p_high = self.pressure if is_outflow else pressure_downstream
+        p_low = pressure_downstream if is_outflow else self.pressure
 
         k = self.kappa
         T = self.temperature
         R = self.gas_constant
+        c_d = 0.5
 
-        c_D = 0.5
+        area = np.pi * (orifice.hole_diameter / 1000.0) ** 2 / 4.0
+        critical_ratio = ((k + 1) / 2) ** (k / (k - 1))  # ~1.893 for k=1.4
+        pressure_ratio = p_high / p_low
 
-        A_V = orifice.hole_diameter/1000**2/4*pi #[m2]
-
-        if pressure_upstream > pressure_downstream:
-            print("outflow")
-            if pressure_upstream/pressure_downstream > 1.893: #<--choked flow:
-
-                print("choked_flow")
-                m_dot = -c_D * A_V*np.sqrt((k * p ** 2 / R / T * (2 / (k + 1)) ** ((k + 1) / (k - 1)))) #[kg/s]
-
-            else:
-                print("unchoked_flow")
-                m_dot = -c_D*A_V*np.sqrt(2)*np.sqrt((p ** 2 / R / T * k / (k - 1) * ((p2 / p) ** (2 / k) - (p2 / p) ** ((k + 1) / k))))
-
-        elif pressure_upstream < pressure_downstream:
-            print("inflow")
-            if pressure_downstream/pressure_upstream > 1.893: #<--choked flow:
-                print("choked_flow")
-                m_dot = c_D * A_V*np.sqrt((k * p2 ** 2 / R / T * (2 / (k + 1)) ** ((k + 1) / (k - 1)))) #[kg/s]
-            else:
-                print("unchoked_flow")
-                m_dot = c_D*A_V*np.sqrt(2)*np.sqrt((p2 ** 2 / R / T * k / (k - 1) * ((p / p2) ** (2 / k) - (p / p2) ** ((k + 1) / k)))) #[kg/s]
-
+        if pressure_ratio > critical_ratio:
+            # Choked flow
+            flow = c_d * area * np.sqrt((k * p_high**2 / (R * T)) * (2 / (k + 1)) ** ((k + 1) / (k - 1)))
         else:
-            m_dot = 0
+            # Subsonic (unchoked) flow
+            pr = p_low / p_high
+            factor = (pr ** (2 / k)) - (pr ** ((k + 1) / k))
+            flow = c_d * area * p_high * np.sqrt((2 * k / (R * T * (k - 1))) * factor)
 
-        return m_dot
+        return -flow if is_outflow else flow
 
-
-
-
-    def heat_release(self, Q_fuel: float,t_end:float, dt: float) -> list:
-
-
+    def heat_release(self, q_fuel: float, t_end: float, dt: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute cumulative energy release and rate over time."""
         time = np.arange(0, t_end + dt, dt)
         t_0 = 0.1
-        d_t = 1
+        d_t = 1.0
         m = 2
         alpha = 5
 
-        heat = (1 - np.exp(-alpha * ((time - t_0) / d_t) ** (m + 1))) * Q_fuel
+        energy = np.zeros_like(time)
+        active = time >= t_0
+        energy[active] = (1 - np.exp(-alpha * ((time[active] - t_0) / d_t) ** (m + 1))) * q_fuel
 
-        return [time, heat]
+        heat_flow = np.diff(energy, prepend=energy[0]) / dt
+        return time, energy, heat_flow

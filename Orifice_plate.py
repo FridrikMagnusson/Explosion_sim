@@ -1,6 +1,10 @@
 import warnings
+import matplotlib.pyplot as plt
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Circle, Rectangle
+import numpy as np
 
-# Suppress the NumPy longdouble warning
+# Suppress the NumPy longdouble warning if applicable
 warnings.filterwarnings(
     "ignore",
     message=r"Signature .* for <class 'numpy\.longdouble'> does not match any known type.*",
@@ -8,114 +12,85 @@ warnings.filterwarnings(
 )
 
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Circle, Rectangle
-
 class Plate:
-    def __init__(self, width: float, height: float,hole_diameter: float,number_of_holes: int):
+    def __init__(
+        self,
+        width: float,
+        height: float,
+        hole_diameter: float,
+        number_of_holes: int,
+    ):
         self.width = width
         self.height = height
-        self.number_of_holes = number_of_holes
-        self.rows = int(np.round(np.sqrt(number_of_holes*self.height/self.width)))
-        self.cols = int(np.round(number_of_holes/self.rows))
         self.hole_diameter = hole_diameter
+        self.number_of_holes = number_of_holes
 
-        print(f"There should be rows: {self.rows} and columns: {self.cols}")
+        # Ensure at least 1 row and 1 column to prevent ZeroDivisionError
+        self.rows = max(1, int(np.round(np.sqrt(number_of_holes * self.height / self.width))))
+        self.cols = max(1, int(np.ceil(number_of_holes / self.rows)))
 
         self.holes = self._create_holes()
 
-    def _create_holes(self):
-        holes = []
+    def _create_holes(self) -> np.ndarray:
+        """Generate (x, y) center coordinates for each hole."""
+        row_spacing = self.height / (self.rows + 1)
+        col_spacing = self.width / (self.cols + 1)
 
-        # Vertical spacing for a hexagonal lattice
-        row_spacing = self.height / (self.rows+1)
-        col_spacing = self.width / (self.cols+1)
+        coords = []
+        for r in range(self.rows):
+            y = (r + 1) * row_spacing
+            offset = col_spacing / 4 if (r % 2 == 1) else -col_spacing / 4
 
-        n_holes = 0
+            for c in range(self.cols):
+                if len(coords) >= self.number_of_holes:
+                    break
+                x = (c + 1) * col_spacing + offset
+                coords.append((x, y))
 
-        for row in range(self.rows):
-            y = (1+row) * row_spacing
-            # Every second row is shifted by half the spacing
-            offset = 0 if row % 2 == 0 else col_spacing / 2
+        return np.array(coords)
 
-            for col in range(self.cols):
-                x = (1+col) * col_spacing + offset
-
-                if n_holes < self.number_of_holes:
-                    holes.append({
-                        "x": x,
-                        "y": y,
-                        "diameter": self.hole_diameter
-                        })
-
-                    n_holes += 1
-
-        return holes
-
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
-            f"Plate({self.width} x {self.height}, "
-            f"{len(self.holes)} holes, "
-            f"hole diameter={self.hole_diameter})"
+            f"Plate(width={self.width}, height={self.height}, "
+            f"holes={len(self.holes)}, hole_diameter={self.hole_diameter})"
         )
 
 
-
-
-
-
-
-def save_plate_png(plate, filename="plate_design.png"):
+def save_plate_png(plate: Plate, filename: str = "plate_design.png", dpi: int = 300) -> None:
+    """Renders the plate and hole layout to a PNG image file."""
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Plate outline
+    # Base plate
     plate_rect = Rectangle(
         (0, 0),
         plate.width,
         plate.height,
         facecolor="lightgray",
         edgecolor="black",
-        linewidth=2
+        linewidth=2,
     )
     ax.add_patch(plate_rect)
 
-    # Draw holes
-    radius = plate.hole_diameter / 2
+    # Batch render holes using PatchCollection for performance
+    radius = plate.hole_diameter / 2.0
+    patches = [Circle((x, y), radius) for x, y in plate.holes]
+    collection = PatchCollection(
+        patches,
+        facecolor="white",
+        edgecolor="black",
+        linewidth=1,
+        match_original=False,
+    )
+    ax.add_collection(collection)
 
-    for hole in plate.holes:
-        circle = Circle(
-            (hole["x"], hole["y"]),
-            radius,
-            facecolor="white",
-            edgecolor="black",
-            linewidth=1
-        )
-        ax.add_patch(circle)
-
-    # Keep correct proportions
+    # Formatting
     ax.set_aspect("equal")
-
-    # Plate dimensions
     ax.set_xlim(0, plate.width)
     ax.set_ylim(0, plate.height)
-
     ax.set_xlabel("Width")
     ax.set_ylabel("Height")
-    ax.set_title(
-        f"Plate Design — {len(plate.holes)} holes "
-        f"(Ø {plate.hole_diameter})"
-    )
-
-    # Grid
+    ax.set_title(f"Plate Design — {len(plate.holes)} holes (Ø {plate.hole_diameter})")
     ax.grid(True, linestyle="--", alpha=0.3)
 
-    # Save PNG
-    plt.savefig(
-        filename,
-        dpi=300,
-        bbox_inches="tight",
-        facecolor="white"
-    )
-
-    plt.close(fig)
+    plt.savefig(filename, dpi=dpi, bbox_inches="tight", facecolor="white")
+    plt.close(fig)  # Prevents memory accumulation
